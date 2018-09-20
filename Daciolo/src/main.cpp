@@ -1,6 +1,8 @@
 #include "Arduino.h"
 #include "etherShield.h"
 
+static int rele = 7;
+
 // please modify the following two lines. mac and ip have to be unique
 // in your local area network. You can not have the same numbers in
 // two devices:
@@ -27,6 +29,8 @@ void setup(){
 
   Serial.begin(9600);
   Serial.write("Started");
+
+  pinMode(rele, OUTPUT);
     
    /*initialize enc28j60*/
    es.ES_enc28j60Init(mymac);
@@ -91,12 +95,9 @@ void loop(){
             plen=print_webpage(buf, 0);
             goto SENDTCP;
         }
-        cmd=analyse_cmd((char *)&(buf[dat_p+5]));
-        if (cmd==1){
-             plen=print_webpage(buf, 1);
-        }else if (cmd==2){
-            plen=print_webpage(buf, 2);
-        }
+        cmd=analyse_cmd((char *)&(buf[dat_p+5]));       
+        plen=print_webpage(buf, cmd);
+        
 SENDTCP:  es.ES_make_tcp_ack_from_any(buf); // send ack for http get
           es.ES_make_tcp_ack_with_data(buf,plen); // send data       
       }
@@ -151,24 +152,28 @@ int8_t analyse_cmd(char *str)
                 }
         }
         return r;
+        
 }
 
 uint16_t getReleStatus(){
-        return 0;
+        return digitalRead(rele);
 }
 
 uint16_t print_webpage(uint8_t *buf, int8_t cmd)
 {
+        Serial.write("printing\r\n");
         uint16_t plen;
         plen=es.ES_fill_tcp_data_p(buf,0,PSTR("HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n"));
         plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<a href=\"http://www.netvasco.com.br\">www.netvasco.com.br<a><br />"));
         if ( cmd == 1 ) {
+                digitalWrite(rele, HIGH);
                 plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("Chamou 1.<br />"));
         }else if ( cmd == 2 ) {
+                digitalWrite(rele, LOW);
                 plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("Chamou 2.<br />"));
-        }else if ( cmd == 3 ){                
-                plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("Chamou 3.<br />"));
+        }else if ( cmd == 3 ){ 
+                String str(getReleStatus());
+                plen=es.ES_fill_tcp_data(buf,plen,str.c_str());
         }
-          
         return(plen);
  }
